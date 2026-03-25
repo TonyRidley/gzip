@@ -1,4 +1,4 @@
-NAME = webserv
+NAME = gzip
 
 CC = c++
 CFLAGS = -Wall -Wextra -Werror -Iincludes
