@@ -31,22 +31,27 @@ static const int clOrder[] = {
 	16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15
 };
 
-int inline lengthToCode(int length)
+// Binary search: find the largest index where base[i] <= value
+static inline int upperSearch(const int* base, int count, int value)
 {
-	for (int i = 28; i >= 0; i--)
+	int lo = 0, hi = count - 1;
+	while (lo < hi)
 	{
-		if (length >= lengthBase[i])
-			return 257 + i;
+		int mid = (lo + hi + 1) / 2;
+		if (base[mid] <= value)
+			lo = mid;
+		else
+			hi = mid - 1;
 	}
-	return 257;
+	return lo;
 }
 
-int inline distToCode(int dist)
+inline int lengthToCode(int length)
 {
-	for (int i = 29; i >= 0; i--)
-	{
-		if (dist >= distBase[i])
-			return i;
-	}
-	return 0;
+	return 257 + upperSearch(lengthBase, 29, length);
+}
+
+inline int distToCode(int dist)
+{
+	return upperSearch(distBase, 30, dist);
 }
