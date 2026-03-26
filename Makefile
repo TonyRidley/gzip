@@ -3,7 +3,7 @@ NAME = gzip
 CC = c++
 CFLAGS = -Wall -Wextra -Werror -Iincludes
 
-SRCS = src/main.cpp src/Deflate.cpp src/Gzip.cpp src/Huffman.cpp src/LZ77.cpp
+SRCS = src/main.cpp src/DeflateCompress.cpp src/DeflateDecompress.cpp src/Gzip.cpp src/Huffman.cpp src/LZ77.cpp
 
 OBJ_DIR = obj
 
