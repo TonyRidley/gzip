@@ -3,7 +3,7 @@
 #include <vector>
 #include <cstring>
 
-// TODO: #include "gzip.h"
+#include "Gzip.hpp"
 
 static std::vector<uint8_t> readFile(const std::string& path)
 {
@@ -53,25 +53,19 @@ int main(int argc, char* argv[])
         {
             std::cout << "Compressing " << input.size() << " bytes...\n";
 
-            // TODO: replace with compress call
-            // auto compressed = Gzip::compress(input.data(), input.size());
-            std::vector<uint8_t> compressed; // placeholder
+            auto compressed = Gzip::compress(input.data(), input.size());
 
             writeFile(outputPath, compressed);
             std::cout << "Written " << compressed.size() << " bytes to " << outputPath << "\n";
-
         }
         else if (mode == "decompress")
         {
             std::cout << "Decompressing " << input.size() << " bytes...\n";
 
-            // TODO: replace with decompress call
-            // auto decompressed = Gzip::decompress(input.data(), input.size());
-            std::vector<uint8_t> decompressed; // placeholder
+            auto decompressed = Gzip::decompress(input.data(), input.size());
 
             writeFile(outputPath, decompressed);
             std::cout << "Written " << decompressed.size() << " bytes to " << outputPath << "\n";
-
         }
         else
         {
