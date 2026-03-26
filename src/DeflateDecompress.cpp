@@ -1,29 +1,12 @@
 #include "Deflate.hpp"
 #include "DeflateTables.hpp"
 #include "Huffman.hpp"
+#include "HuffmanDecoder.hpp"
 #include "BitReader.hpp"
 #include <vector>
 #include <cstdint>
 #include <algorithm>
 #include <stdexcept>
-
-static int decodeSymbol(BitReader& br, const HuffmanTable& table)
-{
-    uint8_t maxLen = *std::max_element(table.lengths.begin(), table.lengths.end());
-    uint16_t code = 0;
-
-    for (int len = 1; len <= maxLen; len++)
-    {
-        code <<= 1;
-        code |= br.readBits(1);
-        for (size_t sym = 0; sym < table.codes.size(); sym++)
-        {
-            if (table.lengths[sym] == len && table.codes[sym] == code)
-                return (int)sym;
-        }
-    }
-    throw std::runtime_error("Deflate: invalid Huffman code");
-}
 
 std::vector<uint8_t> Deflate::decompress(const uint8_t* data, std::size_t size)
 {
@@ -49,7 +32,7 @@ std::vector<uint8_t> Deflate::decompress(const uint8_t* data, std::size_t size)
         }
         else if (btype == 1 || btype == 2)
         {
-            HuffmanTable litTable, distTable;
+            HuffmanDecoder litDecoder, distDecoder;
 
             if (btype == 1)
             {
@@ -59,10 +42,10 @@ std::vector<uint8_t> Deflate::decompress(const uint8_t* data, std::size_t size)
                 for (int i = 144; i <= 255; i++) litLens[i] = 9;
                 for (int i = 256; i <= 279; i++) litLens[i] = 7;
                 for (int i = 280; i <= 287; i++) litLens[i] = 8;
-                litTable = Huffman::buildCanonicalTable(litLens);
+                litDecoder.build(Huffman::buildCanonicalTable(litLens));
 
                 std::vector<uint8_t> dLens(30, 5);
-                distTable = Huffman::buildCanonicalTable(dLens);
+                distDecoder.build(Huffman::buildCanonicalTable(dLens));
             }
             else
             {
@@ -75,13 +58,14 @@ std::vector<uint8_t> Deflate::decompress(const uint8_t* data, std::size_t size)
                 for (int i = 0; i < hclen; i++)
                     clLens[clOrder[i]] = (uint8_t)br.readBits(3);
 
-                auto clTable = Huffman::buildCanonicalTable(clLens);
+                HuffmanDecoder clDecoder;
+                clDecoder.build(Huffman::buildCanonicalTable(clLens));
 
                 std::vector<uint8_t> allLengths;
                 int total = hlit + hdist;
                 while ((int)allLengths.size() < total)
                 {
-                    int sym = decodeSymbol(br, clTable);
+                    int sym = clDecoder.decode(br);
                     if (sym <= 15)
                     {
                         allLengths.push_back((uint8_t)sym);
@@ -113,32 +97,35 @@ std::vector<uint8_t> Deflate::decompress(const uint8_t* data, std::size_t size)
                 litLens.resize(286, 0);
                 dLens.resize(30, 0);
 
-                litTable  = Huffman::buildCanonicalTable(litLens);
-                distTable = Huffman::buildCanonicalTable(dLens);
+                litDecoder.build(Huffman::buildCanonicalTable(litLens));
+                distDecoder.build(Huffman::buildCanonicalTable(dLens));
             }
 
             // Decode symbols
             while (true)
             {
-                int sym = decodeSymbol(br, litTable);
+                int sym = litDecoder.decode(br);
                 if (sym == 256)
-                    break;
+                    break; // end of block
                 if (sym < 256)
                 {
                     output.push_back((uint8_t)sym);
                 }
                 else
                 {
+                    // Length
                     int li = sym - 257;
                     int length = lengthBase[li];
                     if (lengthExtraBits[li] > 0)
                         length += br.readBits(lengthExtraBits[li]);
 
-                    int dsym = decodeSymbol(br, distTable);
+                    // Distance
+                    int dsym = distDecoder.decode(br);
                     int distance = distBase[dsym];
                     if (distExtraBits[dsym] > 0)
                         distance += br.readBits(distExtraBits[dsym]);
 
+                    // Copy from output buffer
                     size_t srcPos = output.size() - distance;
                     for (int j = 0; j < length; j++)
                         output.push_back(output[srcPos + j]);
