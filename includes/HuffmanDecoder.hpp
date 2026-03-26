@@ -10,8 +10,8 @@
 class HuffmanDecoder
 {
 public:
-	static const int FAST_BITS = 9;
-	static const int FAST_SIZE = 1 << FAST_BITS;
+	enum { FAST_BITS = 9 };
+	enum { FAST_SIZE = 1 << FAST_BITS };
 	static const uint32_t INVALID = 0xFFFFFFFF;
 
 	// Build the lookup table from a canonical HuffmanTable
@@ -69,7 +69,7 @@ public:
 	int decode(BitReader& br) const
 	{
 		// Peek up to FAST_BITS
-		int peekCount = std::min((int)_maxLen, FAST_BITS);
+		int peekCount = _maxLen < (int)FAST_BITS ? _maxLen : (int)FAST_BITS;
 		uint32_t bits = br.peekBits(peekCount);
 
 		uint32_t entry = _fast[bits & (FAST_SIZE - 1)];
