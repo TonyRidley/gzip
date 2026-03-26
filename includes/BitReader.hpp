@@ -7,114 +7,84 @@
 class BitReader
 {
 private:
-	const uint8_t*			_data;
-	size_t					_bitPos = 0;
-	size_t					_bytePos = 0;
-	size_t					_size = 0;
+	const uint8_t*	_data;
+	size_t			_bytePos = 0;
+	size_t			_size = 0;
+	uint64_t		_accumulator = 0;
+	int				_bitsInAcc = 0;   // number of valid bits in the accumulator
+
+	// Refill the accumulator so it has at least 32 bits (or as many as remain)
+	void refill()
+	{
+		while (_bitsInAcc <= 56 && _bytePos < _size)
+		{
+			_accumulator |= ((uint64_t)_data[_bytePos]) << _bitsInAcc;
+			_bytePos++;
+			_bitsInAcc += 8;
+		}
+	}
 
 public:
-	BitReader(const uint8_t* data, size_t size) : _data(data), _size(size) {}
+	BitReader(const uint8_t* data, size_t size) : _data(data), _size(size)
+	{
+		refill();
+	}
 
-	// Peek up to 25 bits without advancing the position.
-	// Returns bits LSB-first (bit 0 = next bit in stream).
+	// Peek up to 25 bits without consuming them (LSB-first)
 	uint32_t peekBits(int numBits) const
 	{
-		uint32_t	result = 0;
-		size_t		tmpBytePos = _bytePos;
-		size_t		tmpBitPos = _bitPos;
-
-		for (int i = 0; i < numBits; i++)
-		{
-			if (tmpBytePos >= _size)
-				break;
-			if (_data[tmpBytePos] & (1u << tmpBitPos))
-				result |= (1u << i);
-			tmpBitPos++;
-			if (tmpBitPos == 8)
-			{
-				tmpBitPos = 0;
-				tmpBytePos++;
-			}
-		}
-		return result;
+		return (uint32_t)(_accumulator & ((1ULL << numBits) - 1));
 	}
 
-	// Advance the stream by `numBits` bits (used after peekBits)
+	// Consume `numBits` bits (call after peekBits)
 	void advance(int numBits)
 	{
-		_bitPos += numBits;
-		_bytePos += _bitPos / 8;
-		_bitPos = _bitPos % 8;
+		_accumulator >>= numBits;
+		_bitsInAcc -= numBits;
+		refill();
 	}
-	
+
+	// Read `numBits` bits LSB-first and consume them
 	uint32_t readBits(int numBits)
 	{
-		uint32_t	result = 0;
-		int			i;
-
-		i = 0;
-
-		while (i < numBits)
-		{
-			if (_bitPos >= _size)
-			{
-				throw std::runtime_error("BitReader: Read past end of data.");
-			}
-
-			if (_data[_bytePos] & (1u << _bitPos))
-				result |= (1u << i);
-
-			_bitPos++;
-			if (_bitPos == 8)
-			{
-				_bitPos = 0;
-				_bytePos++;
-			}
-			i++;
-		}
+		if (_bitsInAcc < numBits)
+			refill();
+		if (_bitsInAcc < numBits)
+			throw std::runtime_error("BitReader: Read past end of data.");
+		uint32_t result = (uint32_t)(_accumulator & ((1ULL << numBits) - 1));
+		_accumulator >>= numBits;
+		_bitsInAcc -= numBits;
+		refill();
 		return result;
 	}
 
+	// Read `numBits` bits MSB-first (for Huffman codes written MSB-first)
 	uint32_t readBitsMSB(int numBits)
 	{
-		uint32_t	result = 0;
-		int			i;
-
-		i = 0;
-
-		while (i < numBits)
+		// Read LSB-first, then reverse
+		uint32_t raw = readBits(numBits);
+		uint32_t result = 0;
+		for (int i = 0; i < numBits; i++)
 		{
-			if (_bitPos >= _size)
-			{
-				throw std::runtime_error("BitReader: Read past end of data.");
-			}
-
-			result <<= 1;
-			if (_data[_bytePos] & (1u << _bitPos))
-				result |= 1;
-
-			_bitPos++;
-			if (_bitPos == 8)
-			{
-				_bitPos = 0;
-				_bytePos++;
-			}
-			i++;
+			result = (result << 1) | (raw & 1);
+			raw >>= 1;
 		}
 		return result;
 	}
 
 	void alignToByte()
 	{
-		if (_bitPos != 0)
+		// Discard bits until at a byte boundary.
+		// The accumulator holds _bitsInAcc bits; need to drop the sub-byte remainder.
+		int discard = _bitsInAcc & 7;  // bits past the last byte boundary
+		if (discard > 0)
 		{
-			_bitPos = 0;
-			_bytePos++;
+			_accumulator >>= discard;
+			_bitsInAcc -= discard;
 		}
 	}
 
-	bool hasMore() const { return _bytePos < _size; }
+	bool hasMore() const { return _bitsInAcc > 0 || _bytePos < _size; }
 	size_t bytePosition() const { return _bytePos; }
-	int bitPosition() const { return _bitPos; }
+	int bitPosition() const { return 0; }  // sub-byte position is tracked in the accumulator
 };
-
