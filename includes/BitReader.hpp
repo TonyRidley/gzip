@@ -8,7 +8,7 @@ class BitReader
 {
 private:
 	const uint8_t*			_data;
-	int						_bitPos = 0;
+	size_t					_bitPos = 0;
 	size_t					_bytePos = 0;
 	size_t					_size = 0;
 
